@@ -13,6 +13,7 @@ import org.mpravia.repository.OrderRepository;
 import org.mpravia.repository.entity.Order;
 import org.mpravia.service.OrderService;
 
+import java.util.Objects;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -30,8 +31,9 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponseDto findById(Long orderId) {
 
+        Log.info("Consultando order por id " + orderId);
         var order = orderRepository.findById(orderId);
-        if (order == null) {
+        if ( Objects.isNull(order)) {
             throw new AppException("EB01","La orden no existe", Response.Status.NOT_FOUND);
         }
         var orderResponseDto = orderServiceMapper.toOrderResponseDto(order);
@@ -44,9 +46,6 @@ public class OrderServiceImpl implements OrderService {
                 .toList();
         orderResponseDto.setDetail(listOrderDetailResponse);
 
-        Log.info(" datos orderCode: "  + orderResponseDto.getOrderCode());
-        Log.info(" datos method payment: "  + orderResponseDto.getPaymentMethod());
-        Log.info(" datos price final: "  + orderResponseDto.getPriceFinal());
         return orderResponseDto;
     }
 
@@ -59,9 +58,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderResponseDto createOrder(OrderRequestDto orderRequestDto) {
-        Log.info("Inside createOrder ");
-        if (orderRequestDto.getDetail() == null || orderRequestDto.getDetail().isEmpty() ) {
-            throw new AppException("EB01","La orden no tiene elementos", Response.Status.NOT_FOUND);
+
+        Log.info("Init createOrder ");
+        if (Objects.isNull(orderRequestDto.getDetail()) || orderRequestDto.getDetail().isEmpty() ) {
+            throw new AppException("EB01","La orden no tiene elementos", Response.Status.BAD_REQUEST);
         }
 
         Order order = orderServiceMapper.toOrder(orderRequestDto);
@@ -72,16 +72,15 @@ public class OrderServiceImpl implements OrderService {
 
         Order orderNew = orderRepository.find("orderCode", order.getOrderCode())
                 .firstResultOptional()
-                .orElse(null);
+                .orElseThrow();
 
         var orderDetails = orderRequestDto.getDetail()
                 .stream()
                 .map(detailRequestDto -> orderServiceMapper.toOrderDetail(detailRequestDto))
-                .map(orderDetail -> {
+                .peek(orderDetail -> {
                     orderDetail.setOrderId(orderNew.getId());
                     //orderDetail.setSubTotal(orderDetail.getQuantities()*orderDetail.getProductPrice());
                     orderDetail.setSubTotal(orderDetail.getQuantities()*5);
-                    return orderDetail;
                 })
                 .toList();
         orderDetailsRepository.persist(orderDetails);
@@ -113,14 +112,21 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private String generateUniqueRandomCode() {
+
         Log.info("Generating unique random code ");
         String newCode;
         boolean existCode;
         do {
-            newCode = UUID.randomUUID().toString().substring(0,10).toUpperCase();
-            existCode = orderRepository.find("orderCode", newCode).firstResultOptional().isPresent();
+            newCode = UUID.randomUUID()
+                    .toString()
+                    .substring(0,10)
+                    .toUpperCase();
+            existCode = orderRepository.find("orderCode", newCode)
+                    .firstResultOptional()
+                    .isPresent();
         }while (existCode);
         Log.info("Code generated: " + newCode);
+
         return newCode;
     }
 }
