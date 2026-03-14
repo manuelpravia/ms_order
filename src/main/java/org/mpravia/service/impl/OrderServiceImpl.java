@@ -5,6 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.core.Response;
+import org.mpravia.config.RedisMapProperties;
 import org.mpravia.dto.*;
 import org.mpravia.handler.AppException;
 import org.mpravia.mapper.OrderServiceMapper;
@@ -28,10 +29,22 @@ public class OrderServiceImpl implements OrderService {
     @Inject
     OrderServiceMapper orderServiceMapper;
 
+    @Inject
+    CacheServiceImpl cacheService;
+
+    @Inject
+    RedisMapProperties redisMapProperties;
+
     @Override
     public OrderResponseDto findById(Long orderId) {
+        Log.info("Get order whit id: " + orderId);
+        var dataCache = cacheService.get(redisMapProperties.getOrderName(),getKeyCache(orderId));
 
-        Log.info("Consultando order por id " + orderId);
+        if (Objects.nonNull(dataCache)) {
+            Log.info("Get data order in cache" + orderId);
+            return (OrderResponseDto) dataCache;
+        }
+
         var order = orderRepository.findById(orderId);
         if ( Objects.isNull(order)) {
             throw new AppException("EB01","La orden no existe", Response.Status.NOT_FOUND);
@@ -45,6 +58,12 @@ public class OrderServiceImpl implements OrderService {
                 .map(orderServiceMapper::toDetailResponseDto)
                 .toList();
         orderResponseDto.setDetail(listOrderDetailResponse);
+        Log.info("Get successful of database" );
+
+        cacheService.put(redisMapProperties.getOrderName(),
+                getKeyCache(orderId),
+                orderResponseDto,redisMapProperties.getOrderTtl());
+        Log.info("Save data order in cache" + orderId);
 
         return orderResponseDto;
     }
@@ -92,10 +111,17 @@ public class OrderServiceImpl implements OrderService {
                 .toList();
         orderResponseDto.setDetail(listOrderDetailResponse);
 
+        cacheService.put(redisMapProperties.getOrderName(),
+                getKeyCache(orderNew.getId()),
+                orderResponseDto,redisMapProperties.getOrderTtl());
+
         Log.info("End Service create order");
         return orderResponseDto;
     }
 
+    public String getKeyCache(Long orderId) {
+        return redisMapProperties.getOrderPrefix().concat(String.valueOf(orderId));
+    }
     @Override
     public OrderResponseDto updateOrder(Long orderId, OrderRequestDto orderRequestDto) {
         return null;
