@@ -41,13 +41,13 @@ public class OrderServiceImpl implements OrderService {
         var dataCache = cacheService.get(redisMapProperties.getOrderName(),getKeyCache(orderId));
 
         if (Objects.nonNull(dataCache)) {
-            Log.info("Get data order in cache" + orderId);
+            Log.info("Get order whit cache: " + orderId);
             return (OrderResponseDto) dataCache;
         }
 
         var order = orderRepository.findById(orderId);
         if ( Objects.isNull(order)) {
-            throw new AppException("EB01","La orden no existe", Response.Status.NOT_FOUND);
+            throw new AppException("EB01","the order no exist", Response.Status.NOT_FOUND);
         }
         var orderResponseDto = orderServiceMapper.toOrderResponseDto(order);
         orderResponseDto.setCustomer(new CustomerDto());
@@ -63,7 +63,7 @@ public class OrderServiceImpl implements OrderService {
         cacheService.put(redisMapProperties.getOrderName(),
                 getKeyCache(orderId),
                 orderResponseDto,redisMapProperties.getOrderTtl());
-        Log.info("Save data order in cache" + orderId);
+        Log.info("Save order in cache whit key: " + orderId);
 
         return orderResponseDto;
     }
@@ -78,15 +78,15 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponseDto createOrder(OrderRequestDto orderRequestDto) {
 
-        Log.info("Init createOrder ");
+        Log.info("Init create Order ");
         if (Objects.isNull(orderRequestDto.getDetail()) || orderRequestDto.getDetail().isEmpty() ) {
-            throw new AppException("EB01","La orden no tiene elementos", Response.Status.BAD_REQUEST);
+            throw new AppException("EB01","The order is empty", Response.Status.BAD_REQUEST);
         }
 
         Order order = orderServiceMapper.toOrder(orderRequestDto);
         order.setOrderCode(generateUniqueRandomCode());
 
-        Log.info("Persist order ");
+        Log.info("Persist order in database ");
         orderRepository.persist(order);
 
         Order orderNew = orderRepository.find("orderCode", order.getOrderCode())
@@ -111,6 +111,7 @@ public class OrderServiceImpl implements OrderService {
                 .toList();
         orderResponseDto.setDetail(listOrderDetailResponse);
 
+        Log.info("Save order in cache");
         cacheService.put(redisMapProperties.getOrderName(),
                 getKeyCache(orderNew.getId()),
                 orderResponseDto,redisMapProperties.getOrderTtl());
@@ -122,6 +123,7 @@ public class OrderServiceImpl implements OrderService {
     public String getKeyCache(Long orderId) {
         return redisMapProperties.getOrderPrefix().concat(String.valueOf(orderId));
     }
+
     @Override
     public OrderResponseDto updateOrder(Long orderId, OrderRequestDto orderRequestDto) {
         return null;
