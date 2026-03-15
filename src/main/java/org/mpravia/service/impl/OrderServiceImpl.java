@@ -10,6 +10,9 @@ import org.mpravia.config.RedisMapProperties;
 import org.mpravia.dto.*;
 import org.mpravia.handler.AppException;
 import org.mpravia.mapper.OrderServiceMapper;
+import org.mpravia.message.producer.ProductProducer;
+import org.mpravia.message.producer.dto.OrderCreatedEvent;
+import org.mpravia.message.producer.dto.ProductSold;
 import org.mpravia.proxy.Dto.ProductCodesRequest;
 import org.mpravia.proxy.Dto.ProductResponse;
 import org.mpravia.proxy.service.ProductClientService;
@@ -43,6 +46,9 @@ public class OrderServiceImpl implements OrderService {
 
     @Inject
     ProductClientService productClient;
+
+    @Inject
+    ProductProducer  productProducer;
 
     @Override
     public OrderResponseDto findById(Long orderId) {
@@ -140,6 +146,8 @@ public class OrderServiceImpl implements OrderService {
                 .toList();
         orderResponseDto.setDetail(listOrderDetailResponse);
 
+        senEventUpdateStock(orderResponseDto);
+
         Log.info("Save order in cache");
         cacheService.put(redisMapProperties.getOrderName(),
                 getKeyCache(order.getId()),
@@ -186,4 +194,24 @@ public class OrderServiceImpl implements OrderService {
 
         return newCode;
     }
+
+    public void senEventUpdateStock(OrderResponseDto orderResponseDto) {
+
+        Log.info("sending event to topic ");
+        var updateStock = orderResponseDto.getDetail()
+                .stream()
+                .map(detailResponseDto -> {
+                    ProductSold productSold = new ProductSold();
+                    productSold.setProductCode(detailResponseDto.getProductCode());
+                    productSold.setQuantity(detailResponseDto.getQuantities());
+                    return  productSold;
+                }).toList();
+        OrderCreatedEvent orderCreatedEvent = new OrderCreatedEvent();
+        orderCreatedEvent.setOrderId("update_order_stock");
+        orderCreatedEvent.setProducts(updateStock);
+        productProducer.sendOrderEvent(orderCreatedEvent);
+        Log.info("event sent successfully");
+    }
+
+
 }
