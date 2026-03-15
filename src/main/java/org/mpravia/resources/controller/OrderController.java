@@ -4,12 +4,10 @@ import org.mpravia.api.OrderApi;
 import org.mpravia.model.OrderPageResponse;
 import org.mpravia.model.OrderRequest;
 import org.mpravia.model.OrderResponse;
-import io.quarkus.logging.Log;
 import jakarta.inject.Inject;
 import org.mpravia.mapper.OrderControllerMapper;
 import org.mpravia.service.OrderService;
 
-import java.math.BigInteger;
 import java.util.List;
 
 public class OrderController implements OrderApi{
@@ -55,11 +53,8 @@ public class OrderController implements OrderApi{
      */
     @Override
     public OrderResponse getOrderById(Long id) {
-        var orederReponse = orderControllerMapper.toOrderResponse(orderService.findById(id));
-        Log.info("controller datos orderCode: "  + orederReponse.getOrderCode());
-        Log.info("controller datos method payment: "  + orederReponse.getPaymentMethod());
-        Log.info("controller datos price final: "  + orederReponse.getPriceFinal());
-        return orederReponse;
+
+        return orderControllerMapper.toOrderResponse(orderService.findById(id));
     }
 
     /**

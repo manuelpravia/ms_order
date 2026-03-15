@@ -12,13 +12,12 @@ import org.mpravia.handler.AppException;
 import org.mpravia.mapper.OrderServiceMapper;
 import org.mpravia.proxy.Dto.ProductCodesRequest;
 import org.mpravia.proxy.Dto.ProductResponse;
-import org.mpravia.proxy.ProductClient;
+import org.mpravia.proxy.service.ProductClientService;
 import org.mpravia.repository.OrderDetailsRepository;
 import org.mpravia.repository.OrderRepository;
 import org.mpravia.repository.entity.Order;
 import org.mpravia.service.CacheService;
 import org.mpravia.service.OrderService;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.List;
 import java.util.Objects;
@@ -43,8 +42,7 @@ public class OrderServiceImpl implements OrderService {
     RedisMapProperties redisMapProperties;
 
     @Inject
-    @RestClient
-    ProductClient productClient;
+    ProductClientService productClient;
 
     @Override
     public OrderResponseDto findById(Long orderId) {
@@ -99,10 +97,9 @@ public class OrderServiceImpl implements OrderService {
                 .stream()
                 .map(DetailRequestDto::getProductCode)
                 .toList();
-        productCodesRequest.setCodes(codes);
 
-        List<ProductResponse> products = productClient.getProductsByCode(productCodesRequest);
-        Log.info("cantidad de productos: " + products.size());
+        List<ProductResponse> products = productClient.getProductsByCode(codes);
+        Log.info("Size product: " + products.size());
         Order order = orderServiceMapper.toOrder(orderRequestDto);
         order.setOrderCode(generateUniqueRandomCode());
 
@@ -114,12 +111,11 @@ public class OrderServiceImpl implements OrderService {
                             .filter(productResponse -> productResponse.getCode()
                                     .equals(orderDetail.getProductCode()))
                             .peek(productResponse -> {
-                                Log.info("producto cliente : " + productResponse.getName());
                                 orderDetail.setSubTotal(orderDetail.getQuantities()*productResponse.getPrice());
                                 orderDetail.setProductName(productResponse.getName());
                                 order.setPriceFinal(orderDetail.getSubTotal() + order.getPriceFinal());
                             }).forEach(productResponse -> {
-                                Log.info("lista de productos : " + productResponse.getName());
+                                Log.info("Product Name: " + productResponse.getName());
                             });
 
 
