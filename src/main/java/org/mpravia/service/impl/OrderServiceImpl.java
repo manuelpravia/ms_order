@@ -5,10 +5,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.core.Response;
+import org.mpravia.Utils.Constants;
 import org.mpravia.config.RedisMapProperties;
 import org.mpravia.dto.*;
 import org.mpravia.handler.AppException;
 import org.mpravia.mapper.OrderServiceMapper;
+import org.mpravia.proxy.Dto.ProductCodesRequest;
+import org.mpravia.proxy.Dto.ProductResponse;
 import org.mpravia.proxy.ProductClient;
 import org.mpravia.repository.OrderDetailsRepository;
 import org.mpravia.repository.OrderRepository;
@@ -17,6 +20,7 @@ import org.mpravia.service.CacheService;
 import org.mpravia.service.OrderService;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -46,9 +50,6 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponseDto findById(Long orderId) {
         Log.info("Get order whit id: " + orderId);
         var dataCache = cacheService.get(redisMapProperties.getOrderName(),getKeyCache(orderId));
-
-        var product = productClient.getProduct(7L);
-        Log.info("from microservice product: " + product.getName());
 
         if (Objects.nonNull(dataCache)) {
             Log.info("Get order whit cache: " + orderId);
@@ -93,29 +94,51 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException("EB01","The order is empty", Response.Status.BAD_REQUEST);
         }
 
+        ProductCodesRequest productCodesRequest = new ProductCodesRequest();
+        var codes = orderRequestDto.getDetail()
+                .stream()
+                .map(DetailRequestDto::getProductCode)
+                .toList();
+        productCodesRequest.setCodes(codes);
+
+        List<ProductResponse> products = productClient.getProductsByCode(productCodesRequest);
+        Log.info("cantidad de productos: " + products.size());
         Order order = orderServiceMapper.toOrder(orderRequestDto);
         order.setOrderCode(generateUniqueRandomCode());
-
-        Log.info("Persist order in database ");
-        orderRepository.persist(order);
-
-        Order orderNew = orderRepository.find("orderCode", order.getOrderCode())
-                .firstResultOptional()
-                .orElseThrow();
 
         var orderDetails = orderRequestDto.getDetail()
                 .stream()
                 .map(detailRequestDto -> orderServiceMapper.toOrderDetail(detailRequestDto))
                 .peek(orderDetail -> {
-                    orderDetail.setOrderId(orderNew.getId());
-                    //orderDetail.setSubTotal(orderDetail.getQuantities()*orderDetail.getProductPrice());
-                    orderDetail.setSubTotal(orderDetail.getQuantities()*5);
+                    products.stream()
+                            .filter(productResponse -> productResponse.getCode()
+                                    .equals(orderDetail.getProductCode()))
+                            .peek(productResponse -> {
+                                Log.info("producto cliente : " + productResponse.getName());
+                                orderDetail.setSubTotal(orderDetail.getQuantities()*productResponse.getPrice());
+                                orderDetail.setProductName(productResponse.getName());
+                                order.setPriceFinal(orderDetail.getSubTotal() + order.getPriceFinal());
+                            }).forEach(productResponse -> {
+                                Log.info("lista de productos : " + productResponse.getName());
+                            });
+
+
                 })
                 .toList();
+        order.setAmountIgv(order.getPriceFinal()*Constants.MOUNT_IGV);
+        order.setPriceFinal(order.getPriceFinal() + order.getAmountIgv());
+        Log.info("Persist order in database ");
+        orderRepository.persist(order);
+        Order orderNew = orderRepository.find("orderCode", order.getOrderCode())
+                .firstResultOptional()
+                .orElseThrow();;
+        orderDetails.forEach(orderDetail -> {
+            orderDetail.setOrderId(orderNew.getId());
+        });
         orderDetailsRepository.persist(orderDetails);
 
         OrderResponseDto orderResponseDto = orderServiceMapper.toOrderResponseDto(order);
-        var listOrderDetailResponse = orderDetailsRepository.find("orderId", orderNew.getId())
+        var listOrderDetailResponse = orderDetailsRepository.find("orderId", order.getId())
                 .stream()
                 .map(orderServiceMapper::toDetailResponseDto)
                 .toList();
@@ -123,7 +146,7 @@ public class OrderServiceImpl implements OrderService {
 
         Log.info("Save order in cache");
         cacheService.put(redisMapProperties.getOrderName(),
-                getKeyCache(orderNew.getId()),
+                getKeyCache(order.getId()),
                 orderResponseDto,redisMapProperties.getOrderTtl());
 
         Log.info("End Service create order");
