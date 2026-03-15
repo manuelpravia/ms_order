@@ -2,6 +2,7 @@ package org.mpravia.service.impl;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.mpravia.service.CacheService;
 import org.redisson.api.RMapCache;
 import org.redisson.api.RedissonClient;
 
@@ -9,11 +10,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 @ApplicationScoped
-public class CacheServiceImpl {
+public class CacheServiceImpl implements CacheService {
 
     @Inject
     RedissonClient redissonClient;
 
+    @Override
     public <K, V> V getOrLoad(
             String mapName,
             K key,
@@ -37,6 +39,7 @@ public class CacheServiceImpl {
         return value;
     }
 
+    @Override
     public <K, V> V get(String mapName, K key) {
 
         RMapCache<K, V> map = redissonClient.getMapCache(mapName);
@@ -44,6 +47,7 @@ public class CacheServiceImpl {
         return map.get(key);
     }
 
+    @Override
     public <K,V> void put(String mapName, K key, V value, long ttl) {
 
         redissonClient
@@ -51,7 +55,8 @@ public class CacheServiceImpl {
                 .put(key,value,ttl,TimeUnit.SECONDS);
     }
 
-    public <K> void evict(String mapName, K key){
+    @Override
+    public <K> void evict(String mapName, K key) {
 
         redissonClient
                 .getMapCache(mapName)

@@ -12,6 +12,7 @@ import org.mpravia.mapper.OrderServiceMapper;
 import org.mpravia.repository.OrderDetailsRepository;
 import org.mpravia.repository.OrderRepository;
 import org.mpravia.repository.entity.Order;
+import org.mpravia.service.CacheService;
 import org.mpravia.service.OrderService;
 
 import java.util.Objects;
@@ -30,7 +31,7 @@ public class OrderServiceImpl implements OrderService {
     OrderServiceMapper orderServiceMapper;
 
     @Inject
-    CacheServiceImpl cacheService;
+    CacheService cacheService;
 
     @Inject
     RedisMapProperties redisMapProperties;
