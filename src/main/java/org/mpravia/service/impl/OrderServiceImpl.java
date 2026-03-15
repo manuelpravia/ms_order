@@ -9,11 +9,13 @@ import org.mpravia.config.RedisMapProperties;
 import org.mpravia.dto.*;
 import org.mpravia.handler.AppException;
 import org.mpravia.mapper.OrderServiceMapper;
+import org.mpravia.proxy.ProductClient;
 import org.mpravia.repository.OrderDetailsRepository;
 import org.mpravia.repository.OrderRepository;
 import org.mpravia.repository.entity.Order;
 import org.mpravia.service.CacheService;
 import org.mpravia.service.OrderService;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -36,10 +38,17 @@ public class OrderServiceImpl implements OrderService {
     @Inject
     RedisMapProperties redisMapProperties;
 
+    @Inject
+    @RestClient
+    ProductClient productClient;
+
     @Override
     public OrderResponseDto findById(Long orderId) {
         Log.info("Get order whit id: " + orderId);
         var dataCache = cacheService.get(redisMapProperties.getOrderName(),getKeyCache(orderId));
+
+        var product = productClient.getProduct(7L);
+        Log.info("from microservice product: " + product.getName());
 
         if (Objects.nonNull(dataCache)) {
             Log.info("Get order whit cache: " + orderId);
