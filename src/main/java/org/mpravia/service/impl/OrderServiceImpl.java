@@ -13,7 +13,6 @@ import org.mpravia.mapper.OrderServiceMapper;
 import org.mpravia.message.producer.ProductProducer;
 import org.mpravia.message.producer.dto.OrderCreatedEvent;
 import org.mpravia.message.producer.dto.ProductSold;
-import org.mpravia.proxy.Dto.ProductCodesRequest;
 import org.mpravia.proxy.Dto.ProductResponse;
 import org.mpravia.proxy.service.ProductClientService;
 import org.mpravia.repository.OrderDetailsRepository;
@@ -98,27 +97,27 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException("EB01","The order is empty", Response.Status.BAD_REQUEST);
         }
 
-        ProductCodesRequest productCodesRequest = new ProductCodesRequest();
-        var codes = orderRequestDto.getDetail()
-                .stream()
-                .map(DetailRequestDto::getProductCode)
-                .toList();
-
-        List<ProductResponse> products = productClient.getProductsByCode(codes);
-        Log.info("Size product: " + products.size());
         Order order = orderServiceMapper.toOrder(orderRequestDto);
         order.setOrderCode(generateUniqueRandomCode());
+        List<ProductResponse> listProduct = getProducts(orderRequestDto);
 
         var orderDetails = orderRequestDto.getDetail()
                 .stream()
                 .map(detailRequestDto -> orderServiceMapper.toOrderDetail(detailRequestDto))
                 .peek(orderDetail -> {
-                    products.stream()
+                    listProduct.stream()
                             .filter(productResponse -> productResponse.getCode()
                                     .equals(orderDetail.getProductCode()))
                             .peek(productResponse -> {
+                                if(productResponse.getStock() < orderDetail.getQuantities()) {
+                                    Log.info("insufficient stock for the product: " + productResponse.getName());
+                                    throw new AppException("EB01",
+                                            "insufficient stock for the product: " + productResponse.getName(),
+                                            Response.Status.BAD_REQUEST);
+                                }
                                 orderDetail.setSubTotal(orderDetail.getQuantities()*productResponse.getPrice());
                                 orderDetail.setProductName(productResponse.getName());
+                                orderDetail.setProductPrice(productResponse.getPrice());
                                 order.setPriceFinal(orderDetail.getSubTotal() + order.getPriceFinal());
                             }).forEach(productResponse -> {
                                 Log.info("Product Name: " + productResponse.getName());
@@ -153,8 +152,20 @@ public class OrderServiceImpl implements OrderService {
                 getKeyCache(order.getId()),
                 orderResponseDto,redisMapProperties.getOrderTtl());
 
-        Log.info("End Service create order");
+        Log.info("Order created whit code: " + order.getOrderCode());
         return orderResponseDto;
+    }
+
+    public List<ProductResponse> getProducts(OrderRequestDto orderRequestDto) {
+
+        Log.info("Get ms-product... ");
+        var codes = orderRequestDto.getDetail()
+                .stream()
+                .map(DetailRequestDto::getProductCode)
+                .toList();
+
+        return productClient.getProductsByCode(codes);
+
     }
 
     public String getKeyCache(Long orderId) {

@@ -11,7 +11,7 @@ public class ProductResponse {
     private String name;
     private String description;
     private String presentation;
-    private double price;
+    private long price;
     private Integer stock;
     private Long categoryId;
     private  String imageUrl;
